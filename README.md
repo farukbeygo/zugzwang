@@ -6,12 +6,13 @@ A Claude Code skill that lets you play a full game of chess directly in your ter
 
 ## Features
 
-- Play as White or Black against Claude
+- Play as White or Black against Claude, or just have Claude analyze a position
 - Full move validation via `python-chess` — no illegal moves ever accepted
 - Undo any move
 - Export the game as PGN (paste into lichess, chess.com, etc.)
 - Resumable across sessions — board state survives context resets
 - Brief, optional move commentary from Claude
+- Token-light by design: a tightly scoped trigger, a condensed skill body, and a small `.chess/notes.md` cheat-sheet so resuming a game doesn't reload the whole skill
 
 ## Requirements
 
@@ -27,10 +28,11 @@ A Claude Code skill that lets you play a full game of chess directly in your ter
 
 ## Usage
 
-Just talk naturally to Claude:
+The skill only activates on an explicit chess request, so it stays out of the way the rest of the time. Just talk naturally to Claude:
 
 - `"Let's play chess"` — starts a new game
 - `"I'll play e4"` — makes a move
+- `"Analyze this position"` — Claude comments on the current board
 - `"Show me the board"` — renders the current position
 - `"Undo that"` — takes back the last move
 - `"Export the PGN"` — get the full game record
