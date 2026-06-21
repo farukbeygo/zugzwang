@@ -40,6 +40,30 @@ The skill only activates on an explicit chess request, so it stays out of the wa
 
 Claude will handle the rest — fetching state, validating moves, picking its own reply, and showing the board after each turn.
 
+## Example: the Najdorf
+
+Ask Claude to *"play the Najdorf and show me the board"* and it sets up the position move by move, validating each one, then renders it:
+
+```
+8  r n b q k b . r
+7  . p . . p p p p
+6  p . . p . n . .
+5  . . . . . . . .
+4  . . . N P . . .
+3  . . N . . . . .
+2  P P P . . P P P
+1  R . B Q K B . R
+   a b c d e f g h
+```
+
+*(uppercase = White, lowercase = Black; White to move)*
+
+This is the **Najdorf Variation** of the Sicilian Defense, reached after **1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6**. The defining move is **5...a6** — it denies White's pieces the b5 square and prepares Black's queenside expansion with ...b5, ...Bb7, hitting the e4 pawn. White's main tries from here:
+
+- **6.Be2** — the quiet, classical main line
+- **6.Bg5** — the sharp Najdorf, pinning the f6-knight
+- **6.Be3** — the English Attack, aiming for f3, g4, and a kingside pawn storm
+
 ## How it works
 
 All game logic runs through `scripts/chess_engine.py`, a thin wrapper around `python-chess`. Claude calls it as a subprocess and reads JSON output. The board state is stored in `.chess/game.json` in your working directory.
