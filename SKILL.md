@@ -1,50 +1,38 @@
 ---
 name: zugzwang
-description: Play or analyze a game of chess. Trigger ONLY when the user explicitly asks to play chess, make or take back a chess move, resume a game, see the board, or analyze a chess position — e.g. "play chess", "let's play", "I'll play e4", "what's the position", "undo", "analyze this position". Board state lives on disk and every move is validated by python-chess, so long games never desync. Do NOT trigger for anything that is not an explicit chess request.
+description: Chess toolkit — play, analyze, coach, or create puzzles. Trigger ONLY on an explicit chess request, then route to ONE mode and read only that file in modes/. PLAYER — play a game vs Claude ("play chess", "I'll play e4", "your move"). ANALYZER — evaluate a single position or find best moves ("analyze this position", "what's best here"). TEACHER — review the user's own games and coach their weaknesses ("review my games", "help me improve", import from Lichess/Chess.com). TACTICIAN — generate puzzles or opening ideas ("give me a tactics puzzle", "show an opening trap"). Board state lives on disk, validated by python-chess. Do NOT trigger for non-chess requests, and do NOT load more than one mode file.
 ---
 
 # Zugzwang
 
-Chess with one rule: **the game file on disk is the only source of truth.** Never reconstruct the board from memory or chat history — that is the exact bug this skill exists to prevent. All legality, check, mate, and draw logic comes from `scripts/chess_engine.py` (a `python-chess` wrapper), never from your own reasoning.
+A chess toolkit with one rule: **the state on disk is the only source of truth.** Never reconstruct a board from memory or chat history — that is the bug this skill exists to prevent. Legality, check, mate, and evaluation come from the scripts, never from your own reasoning.
 
 ## Setup (once per session)
 ```bash
 python3 -c "import chess" 2>/dev/null || pip install chess --break-system-packages -q
 ```
+(Individual modes note any extra dependencies, e.g. the analyzer's engine.)
 
-## Session memory (do this first — keeps token use low)
-On the first chess request of a session, write a tiny `.chess/notes.md` so you don't reload this whole skill later:
+## Routing — pick ONE mode, read only that file
+
+| The user wants to… | Mode | Read |
+|--------------------|------|------|
+| Play a game against Claude | **player** | `modes/player.md` |
+| Analyze a single position / find the best move | **analyzer** | `modes/analyzer.md` |
+| Review their own games and improve | **teacher** | `modes/teacher.md` |
+| Get puzzles or opening ideas | **tactician** | `modes/tactician.md` |
+
+Load exactly one mode file — that's the whole point of the split, so don't read the others. If the request is ambiguous (e.g. "let's do some chess"), ask which they want before loading a mode. A session can switch modes later; just load the new file then.
+
+## Session memory (keeps token use low)
+On the first chess request of a session, write a tiny `.chess/notes.md` so you don't reload this router or a mode file unnecessarily later:
 ```
 # zugzwang
-cmds: new --user-color W|B · state · move <SAN|UCI> · undo · render · pgn   (all take --game-file PATH)
-state file: .chess/game.json   |   user color: <white|black>
-resume: python3 scripts/chess_engine.py state
+active mode: <player|analyzer|teacher|tactician>
+state file: .chess/game.json   |   user color: <white|black> (player mode)
+shared engine: scripts/chess_engine.py  (new · state · move <SAN|UCI> · undo · render · pgn; all take --game-file PATH)
 ```
-On a later turn, or when resuming, read `.chess/notes.md` + run `state` instead of re-reading this file.
+On a later turn, read `.chess/notes.md` instead of re-reading this router.
 
-## Commands
-All return one-line JSON (except `render`, plain text). Game lives at `.chess/game.json`.
-
-| Need | Command |
-|------|---------|
-| Start | `python3 scripts/chess_engine.py new --user-color white` (or `black`; `--force` to overwrite) |
-| Position, turn, legal moves, status | `python3 scripts/chess_engine.py state` |
-| Apply a move | `python3 scripts/chess_engine.py move "e4"` (SAN or UCI) |
-| Take back last ply | `python3 scripts/chess_engine.py undo` |
-| Just show the board | `python3 scripts/chess_engine.py render` |
-| Export game | `python3 scripts/chess_engine.py pgn` |
-
-## The loop (every turn)
-1. **Re-fetch state before acting** — run `state`, or reuse the JSON from your last `move`. Trust that output, not your memory.
-2. **User's move:** apply with `move`. If the output has an `"error"` field, relay the reason and suggest from the returned legal list — don't guess what they meant.
-3. **Check `"status"` after every move.** `checkmate` / `stalemate` / `draw_*` → announce the result and stop; don't keep playing.
-4. **Your move:** pick a move **from the returned `legal_moves_san`** (never invent one), play it, give one or two sentences of commentary, then show the board.
-5. **Undo** is one ply per call — call twice to take back a full round.
-
-## Token notes
-- Prefer `render` over `state` when you only need the picture.
-- `move` and `state` output already include the legal moves — never call `legal` separately before moving.
-- Don't reprint the move history; use `pgn` only when the user asks for the record.
-
-## Resuming / multiple games
-`new` refuses if a game already exists — surface that to the user and only pass `--force` after they confirm. Returning after a break: just run `state`. Use `--game-file PATH` for concurrent games.
+## Shared board engine
+All modes share `scripts/chess_engine.py` for board truth (one-line JSON output, `.chess/game.json` by default). Verbs: `new --user-color W|B`, `state`, `move <SAN|UCI>`, `undo`, `render`, `pgn`. Each accepts `--game-file PATH` for concurrent games. Mode files reference it as needed.
